@@ -1,0 +1,21 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "servicePrincipalId": {
+        "value": "7579e60d-f09a-45b3-bd93-3f673f625f19"
+      },
+      "enviromentSuffix": {
+        "value": "dev"
+      },
+      "CRMURLStringValue": {
+        "value": ""
+      },
+      "CRMUserIdValue": {
+        "value": ""
+      },
+      "CRMUserPasswordValue": {
+        "value": ""
+      }
+    }
+  }

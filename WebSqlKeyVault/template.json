@@ -1,0 +1,240 @@
+{
+  "parameters": {
+    "servicePrincipalId": {
+      "type": "string"
+    },
+    "enviromentSuffix": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "CRMURLStringValue": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "CRMUserIdValue": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "CRMUserPasswordValue": {
+      "type": "string",
+      "defaultValue": ""
+    }
+  },
+  "variables": {
+    "enviromentSuffix": "[toLower(parameters('enviromentSuffix'))]",
+    "sqlServerName": "[concat('fagsamlingsqldb', variables('enviromentSuffix'))]",
+    "databaseName": "[concat('DB', variables('enviromentSuffix'))]",
+    "administratorLogin": "[concat('l', uniqueString(resourceGroup().id, 'a610c54e-6182-4118-ab38-1eb47b876180'))]",
+    "administratorLoginPassword": "[concat('P!', uniqueString(resourceGroup().id, '8e360aef-97c1-4c12-b4fb-7fa58ecf3e04'), 'x', '!')]",
+    "edition": "Standard",
+    "collation": "SQL_Latin1_General_CP1_CI_AS",
+    "maxSizeBytes": "268435456000",
+    "requestedServiceObjectiveName": "S1",
+    "apiName": "[concat('fagsamlingapi', variables('enviromentSuffix'))]",
+    "hostingPlanName": "[concat(variables('apiName'), 'Plan')]",
+    "hostingEnvironment": "",
+    "keyvaultName": "[concat('fagsamlingkeys', variables('enviromentSuffix'))]",
+    "location": "[resourceGroup().location]",
+    "sku": "Standard",
+    "workerSize": "0",
+    "resourceGroupName": "[toLower(resourceGroup().name)]",
+    "skuCode": "S1",
+    "subscriptionId": "[subscription().subscriptionId]",
+    "tenantId": "[subscription().tenantId]",
+    "networkAcls": {
+      "defaultAction": "Allow",
+      "bypass": "AzureServices",
+      "virtualNetworkRules": [],
+      "ipRules": []
+    },
+    "CRMURLStringValue": "[parameters('CRMURLStringValue')]",
+    "CRMUserIdValue": "[parameters('CRMUserIdValue')]",
+    "CRMUserPasswordValue": "[parameters('CRMUserPasswordValue')]"
+  },
+  "resources": [
+    {
+      "name": "[variables('apiName')]",
+      "type": "Microsoft.Web/sites",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('microsoft.insights/components/', variables('apiName')), '2015-05-01').InstrumentationKey]"
+            }
+          ]
+        },
+        "name": "[variables('apiName')]",
+        "serverFarmId": "[concat('/subscriptions/', variables('subscriptionId'),'/resourcegroups/', variables('resourceGroupName'), '/providers/Microsoft.Web/serverfarms/', variables('hostingPlanName'))]",
+        "hostingEnvironment": "[variables('hostingEnvironment')]"
+      },
+      "dependsOn": [
+        "[concat('Microsoft.Web/serverfarms/', variables('hostingPlanName'))]",
+        "[resourceId('microsoft.insights/components/', variables('apiName'))]"
+      ],
+      "apiVersion": "2016-03-01",
+      "location": "[variables('location')]"
+    },
+    {
+      "apiVersion": "2016-09-01",
+      "name": "[variables('hostingPlanName')]",
+      "type": "Microsoft.Web/serverfarms",
+      "location": "[variables('location')]",
+      "properties": {
+        "name": "[variables('hostingPlanName')]",
+        "workerSizeId": "[variables('workerSize')]",
+        "numberOfWorkers": "1",
+        "hostingEnvironment": "[variables('hostingEnvironment')]"
+      },
+      "sku": {
+        "Tier": "[variables('sku')]",
+        "Name": "[variables('skuCode')]"
+      }
+    },
+    {
+      "apiVersion": "2015-05-01",
+      "name": "[variables('apiName')]",
+      "type": "microsoft.insights/components",
+      "location": "[variables('location')]",
+      "tags": {
+        "[concat('hidden-link:', resourceGroup().id, '/providers/Microsoft.Web/sites/', variables('apiName'))]": "Resource"
+      },
+      "properties": {
+        "ApplicationId": "[variables('apiName')]",
+        "Request_Source": "IbizaWebAppExtensionCreate"
+      }
+    },
+    {
+      "name": "[variables('sqlServerName')]",
+      "type": "Microsoft.Sql/servers",
+      "location": "[variables('location')]",
+      "apiVersion": "2014-04-01-preview",
+      "properties": {
+        "administratorLogin": "[variables('administratorLogin')]",
+        "administratorLoginPassword": "[variables('administratorLoginPassword')]",
+        "version": "12.0"
+      },
+      "resources": [
+        {
+          "name": "[variables('databaseName')]",
+          "type": "databases",
+          "location": "[variables('location')]",
+          "apiVersion": "2014-04-01-preview",
+          "dependsOn": [
+            "[concat('Microsoft.Sql/servers/', variables('sqlServerName'))]"
+          ],
+          "properties": {
+            "edition": "[variables('edition')]",
+            "collation": "[variables('collation')]",
+            "maxSizeBytes": "[variables('maxSizeBytes')]",
+            "requestedServiceObjectiveName": "[variables('requestedServiceObjectiveName')]"
+          }
+        },
+        {
+          "apiVersion": "2014-04-01-preview",
+          "dependsOn": [
+            "[concat('Microsoft.Sql/servers/', variables('sqlServerName'))]"
+          ],
+          "location": "[variables('location')]",
+          "name": "AllowAllWindowsAzureIps",
+          "properties": {
+            "endIpAddress": "0.0.0.0",
+            "startIpAddress": "0.0.0.0"
+          },
+          "type": "firewallrules"
+        }
+      ]
+    },
+    {
+      "apiVersion": "2016-10-01",
+      "name": "[variables('keyvaultName')]",
+      "location": "[variables('location')]",
+      "type": "Microsoft.KeyVault/vaults",
+      "properties": {
+        "enabledForDeployment": true,
+        "enabledForTemplateDeployment": true,
+        "enabledForDiskEncryption": false,
+        "accessPolicies": [
+          {
+            "objectId": "[parameters('servicePrincipalId')]",
+            "tenantId": "[variables('tenantId')]",
+            "permissions": {
+              "keys": [ "All" ],
+              "secrets": [ "All" ]
+            }
+          },
+          {
+            "tenantId": "[variables('tenantId')]",
+            "objectId": "[reference(concat(resourceId('Microsoft.Web/sites', variables('apiName')), '/providers/Microsoft.ManagedIdentity/Identities/default'), '2015-08-31-PREVIEW').principalId]",
+            "permissions": {
+              "keys": [],
+              "secrets": [
+                "get"
+              ],
+              "certificates": []
+            }
+          }
+        ],
+        "tenantId": "[variables('tenantId')]",
+        "sku": {
+          "name": "[variables('sku')]",
+          "family": "A"
+        },
+        "networkAcls": "[variables('networkAcls')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', variables('apiName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "name": "[concat(variables('keyvaultName'),'/SQLConnection')]",
+      "apiVersion": "2015-06-01",
+      "properties": {
+        "value": "[concat('Server=tcp:' , reference(concat('Microsoft.SQL/servers/', variables('sqlServerName'))).fullyQualifiedDomainName , ',1433;Initial Catalog=GKDB;Persist Security Info=False;User Id=', variables('administratorLogin'),';Password=',variables('administratorLoginPassword'),';MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]",
+        "[resourceId('Microsoft.Sql/servers/', variables('sqlServerName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "name": "[concat(variables('keyvaultName'),'/CRMURLString')]",
+      "apiVersion": "2015-06-01",
+      "properties": {
+        "value": "[variables('CRMURLStringValue')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "name": "[concat(variables('keyvaultName'),'/CRMUserId')]",
+      "apiVersion": "2015-06-01",
+      "properties": {
+        "value": "[variables('CRMUserIdValue')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "name": "[concat(variables('keyvaultName'),'/CRMUserPassword')]",
+      "apiVersion": "2015-06-01",
+      "properties": {
+        "value": "[variables('CRMUserPasswordValue')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyvaultName'))]"
+      ]
+    }
+  ],
+  "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0"
+}
